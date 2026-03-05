@@ -14,7 +14,13 @@ class JoinManager:
     async def fetch_links_from_channel(self, bot, channel_username, start_id=None, end_id=None):
         links = []
         try:
-            async for message in bot.get_chat_history(channel_username):
+            if channel_username.startswith("+") or len(channel_username) > 20:
+                chat = await bot.join_chat(channel_username)
+                chat_id = chat.id
+            else:
+                chat_id = channel_username
+            
+            async for message in bot.get_chat_history(chat_id):
                 if start_id and end_id:
                     if message.id < start_id or message.id > end_id:
                         continue
