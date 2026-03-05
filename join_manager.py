@@ -15,14 +15,25 @@ class JoinManager:
         links = []
         try:
             if channel_username.startswith("+") or len(channel_username) > 20:
-                chat = await bot.join_chat(channel_username)
-                chat_id = chat.id
+                try:
+                    chat = await bot.join_chat(channel_username)
+                    chat_id = chat.id
+                except:
+                    chat_id = channel_username
             else:
+                if not channel_username.startswith("@"):
+                    channel_username = f"@{channel_username}"
                 chat_id = channel_username
             
+            message_count = 0
             async for message in bot.get_chat_history(chat_id):
+                message_count += 1
+                
                 if start_id and end_id:
                     if message.id < start_id or message.id > end_id:
+                        continue
+                elif start_id:
+                    if message.id != start_id:
                         continue
                 
                 if message.text:
@@ -32,6 +43,9 @@ class JoinManager:
                 if message.caption:
                     found_links = self.extract_links(message.caption)
                     links.extend(found_links)
+            
+            print(f"Checked {message_count} messages, found {len(links)} links")
+            
         except Exception as e:
             print(f"Error fetching links: {e}")
         
