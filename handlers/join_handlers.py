@@ -218,6 +218,7 @@ async def handle_join_text_input(client: Client, message: Message):
     
     if message.text in ["➕ Add Account", "📋 My Accounts", "🔗 Join Channels", "📢 DB Channels", 
                         "👥 Manage Sudoers", "📊 Statistics", "⚙️ Settings", "📣 Broadcast"]:
+        join_states.pop(user_id, None)
         return
     
     state = join_states[user_id]
@@ -225,24 +226,43 @@ async def handle_join_text_input(client: Client, message: Message):
     
     if action == "add_db_channel":
         try:
-            parts = message.text.split("|")
-            name = parts[0].strip()
-            username = parts[1].strip().replace("@", "")
+            text = message.text.strip()
+            
+            if text.startswith("https://t.me/"):
+                if "/+" in text or "/joinchat/" in text:
+                    invite_hash = text.split("/")[-1]
+                    name = f"Private Channel {invite_hash[:8]}"
+                    username = invite_hash
+                else:
+                    username = text.split("/")[-1].replace("@", "")
+                    name = f"Channel @{username}"
+            elif "|" in text:
+                parts = text.split("|")
+                name = parts[0].strip()
+                username = parts[1].strip().replace("@", "")
+            else:
+                await message.reply_text(
+                    "❌ Invalid format!\n\n"
+                    "Send either:\n"
+                    "• Channel link: https://t.me/username\n"
+                    "• Private link: https://t.me/+xyz\n"
+                    "• Format: Name | @username"
+                )
+                return
             
             channel_data = {
                 "name": name,
-                "username": username
+                "username": username,
+                "is_private": "/+" in text or "/joinchat/" in text
             }
             
             await db.add_db_channel(channel_data)
             await message.reply_text(f"✅ DB Channel '{name}' added successfully!")
             
-            del join_states[user_id]
-        except:
-            await message.reply_text(
-                "❌ Invalid format!\n\n"
-                "Use: Channel Name | @username"
-            )
+            join_states.pop(user_id, None)
+        except Exception as e:
+            await message.reply_text(f"❌ Error: {str(e)}")
+            join_states.pop(user_id, None)
     
     elif action == "awaiting_range":
         try:
@@ -265,8 +285,9 @@ async def handle_join_text_input(client: Client, message: Message):
                 "📢 Select a DB channel:",
                 reply_markup=db_channel_keyboard(channels)
             )
-        except:
+        except Exception as e:
             await message.reply_text(
-                "❌ Invalid format!\n\n"
+                f"❌ Invalid format! {str(e)}\n\n"
                 "Use: 123 or 100-200"
             )
+            join_states.pop(user_id, None)
