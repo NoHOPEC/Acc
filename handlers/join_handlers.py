@@ -61,11 +61,32 @@ async def use_db_channel_callback(client: Client, callback: CallbackQuery):
     
     channel = channels[channel_idx]
     join_states[user_id]["channel"] = channel
+    join_states[user_id]["channel_username"] = channel.get("username")
     
-    await callback.message.edit_text(
-        "🎯 Select join type:",
-        reply_markup=join_type_keyboard()
-    )
+    msg = await callback.message.edit_text("⏳ Joining DB channel first...")
+    
+    try:
+        username = channel.get("username")
+        if username.startswith("+") or len(username) > 20:
+            await client.join_chat(username)
+        else:
+            await client.join_chat(f"@{username}" if not username.startswith("@") else username)
+        
+        await msg.edit_text(
+            f"✅ Joined DB channel!\n\n"
+            "🎯 Select join type:",
+            reply_markup=join_type_keyboard()
+        )
+    except Exception as e:
+        if "already" in str(e).lower():
+            await msg.edit_text(
+                f"✅ Already in DB channel!\n\n"
+                "🎯 Select join type:",
+                reply_markup=join_type_keyboard()
+            )
+        else:
+            await msg.edit_text(f"❌ Error joining DB channel: {str(e)}")
+            join_states.pop(user_id, None)
 
 @Client.on_callback_query(filters.regex("^join_type_"))
 async def join_type_callback(client: Client, callback: CallbackQuery):
@@ -77,7 +98,7 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
         return
     
     state = join_states[user_id]
-    channel = state.get("channel")
+    channel_username = state.get("channel_username")
     mode = state.get("mode", "all")
     
     accounts = await db.get_all_accounts()
@@ -90,38 +111,56 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
     start_id = state.get("start_id")
     end_id = state.get("end_id")
     
-    links = await join_manager.fetch_links_from_channel(
-        client,
-        channel.get("username"),
-        start_id,
-        end_id
-    )
+    try:
+        links = await join_manager.fetch_links_from_channel(
+            client,
+            channel_username,
+            start_id,
+            end_id
+        )
+    except Exception as e:
+        await callback.message.edit_text(f"❌ Error fetching links: {str(e)}")
+        join_states.pop(user_id, None)
+        return
     
     if not links:
-        await callback.message.edit_text("❌ No links found in the specified range!")
-        del join_states[user_id]
+        await callback.message.edit_text(
+            f"❌ No links found in DB channel!\n\n"
+            f"Channel: {channel_username}\n"
+            f"Range: {start_id or 'All'} to {end_id or 'All'}\n\n"
+            "Make sure:\n"
+            "• DB channel has messages\n"
+            "• Messages contain t.me links\n"
+            "• Message IDs are correct"
+        )
+        join_states.pop(user_id, None)
         return
+    
+    unique_links = list(set(links))
     
     progress_msg = await callback.message.edit_text(
         f"🚀 Starting join process...\n\n"
-        f"📊 Total Links: {len(links)}\n"
+        f"📊 Total Links Found: {len(unique_links)}\n"
         f"👥 Total Accounts: {len(accounts)}\n"
         f"🎯 Join Type: {join_type.capitalize()}\n\n"
         f"⏳ Progress: 0%"
     )
     
     async def update_progress(progress, acc_num, total_acc, link_num, total_links):
-        await progress_msg.edit_text(
-            f"🚀 Join Process Active...\n\n"
-            f"📊 Total Links: {total_links}\n"
-            f"👥 Account: {acc_num}/{total_acc}\n"
-            f"🔗 Link: {link_num}/{total_links}\n\n"
-            f"⏳ Progress: {progress:.1f}%"
-        )
+        try:
+            await progress_msg.edit_text(
+                f"🚀 Join Process Active...\n\n"
+                f"📊 Total Links: {total_links}\n"
+                f"👥 Account: {acc_num}/{total_acc}\n"
+                f"🔗 Link: {link_num}/{total_links}\n\n"
+                f"⏳ Progress: {progress:.1f}%"
+            )
+        except:
+            pass
     
     results = await join_manager.join_links(
         accounts,
-        links,
+        unique_links,
         join_type,
         update_progress
     )
@@ -131,10 +170,10 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
         f"✅ Success: {results['success']}\n"
         f"⚠️ Already Member: {results['already_member']}\n"
         f"❌ Failed: {results['failed']}\n\n"
-        f"📊 Total Processed: {len(links) * len(accounts)}"
+        f"📊 Total Processed: {len(unique_links) * len(accounts)}"
     )
     
-    del join_states[user_id]
+    join_states.pop(user_id, None)
 
 @Client.on_message(filters.regex("^📢 DB Channels$") & filters.private)
 async def db_channels_menu(client: Client, message: Message):
