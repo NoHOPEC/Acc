@@ -132,6 +132,7 @@ async def handle_admin_text_input(client: Client, message: Message):
     
     if message.text in ["➕ Add Account", "📋 My Accounts", "🔗 Join Channels", "📢 DB Channels", 
                         "👥 Manage Sudoers", "📊 Statistics", "⚙️ Settings", "📣 Broadcast"]:
+        admin_states.pop(user_id, None)
         return
     
     state = admin_states[user_id]
@@ -143,13 +144,13 @@ async def handle_admin_text_input(client: Client, message: Message):
             
             if new_sudoer_id == user_id:
                 await message.reply_text("❌ You cannot add yourself as sudoer!")
-                del admin_states[user_id]
+                admin_states.pop(user_id, None)
                 return
             
             await db.add_sudoer(new_sudoer_id)
             await message.reply_text(f"✅ User {new_sudoer_id} added as sudoer!")
             
-            del admin_states[user_id]
+            admin_states.pop(user_id, None)
         except ValueError:
             await message.reply_text("❌ Invalid user ID! Please send a numeric ID.")
     
@@ -187,7 +188,7 @@ async def handle_admin_text_input(client: Client, message: Message):
             f"📊 Total: {len(users)}"
         )
         
-        del admin_states[user_id]
+        admin_states.pop(user_id, None)
 
 @Client.on_message(filters.regex("^📣 Broadcast$") & filters.private)
 async def broadcast_menu(client: Client, message: Message):
