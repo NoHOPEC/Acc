@@ -50,11 +50,18 @@ async def add_direct_callback(client: Client, callback: CallbackQuery):
         "Example: +919876543210"
     )
 
-@Client.on_message(filters.text & filters.private)
+@Client.on_message(filters.text & filters.private, group=1)
 async def handle_text_input(client: Client, message: Message):
     user_id = message.from_user.id
     
     if user_id not in user_states:
+        return
+    
+    if message.text.startswith('/'):
+        return
+    
+    if message.text in ["➕ Add Account", "📋 My Accounts", "🔗 Join Channels", "📢 DB Channels", 
+                        "👥 Manage Sudoers", "📊 Statistics", "⚙️ Settings", "📣 Broadcast"]:
         return
     
     state = user_states[user_id]
