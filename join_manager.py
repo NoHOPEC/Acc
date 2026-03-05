@@ -11,50 +11,18 @@ class JoinManager:
     def __init__(self):
         self.join_delay = 3
 
-    async def fetch_links_from_channel(self, bot, channel_username, start_id=None, end_id=None):
-        links = []
-        try:
-            if channel_username.startswith("+") or len(channel_username) > 20:
-                try:
-                    chat = await bot.join_chat(channel_username)
-                    chat_id = chat.id
-                except:
-                    chat_id = channel_username
-            else:
-                if not channel_username.startswith("@"):
-                    channel_username = f"@{channel_username}"
-                chat_id = channel_username
-            
-            message_count = 0
-            async for message in bot.get_chat_history(chat_id):
-                message_count += 1
-                
-                if start_id and end_id:
-                    if message.id < start_id or message.id > end_id:
-                        continue
-                elif start_id:
-                    if message.id != start_id:
-                        continue
-                
-                if message.text:
-                    found_links = self.extract_links(message.text)
-                    links.extend(found_links)
-                
-                if message.caption:
-                    found_links = self.extract_links(message.caption)
-                    links.extend(found_links)
-            
-            print(f"Checked {message_count} messages, found {len(links)} links")
-            
-        except Exception as e:
-            print(f"Error fetching links: {e}")
-        
-        return links
-
     def extract_links(self, text):
-        pattern = r'https?://(?:t\.me|telegram\.me|telegram\.dog)/(?:joinchat/)?([^\s]+)'
+        pattern = r'https?://(?:t\.me|telegram\.me|telegram\.dog)/(?:\+|joinchat/)?([^\s\)\]]+)'
         matches = re.findall(pattern, text)
-        return [f"https://t.me/{match}" if not match.startswith('joinchat') else f"https://t.me/joinchat/{match}" for match in matches]
+        links = []
+        for match in matches:
+            if match.startswith('+') or len(match) > 20:
+                links.append(f"https://t.me/+{match.replace('+', '')}")
+            elif 'joinchat' in text:
+                links.append(f"https://t.me/joinchat/{match}")
+            else:
+                links.append(f"https://t.me/{match}")
+        return links
 
     def categorize_link(self, link):
         if '/joinchat/' in link or '/+' in link:
