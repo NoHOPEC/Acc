@@ -118,14 +118,15 @@ async def handle_text_input(client: Client, message: Message):
             
             await message.reply_text(
                 f"📨 OTP sent to {phone}\n\n"
-                "Please send the verification code:"
+                "Please send the verification code with spaces:\n\n"
+                "Example: 1 2 3 4 5"
             )
         except Exception as e:
             await message.reply_text(f"❌ Error: {str(e)}")
             user_states.pop(user_id, None)
     
     elif action == "add_direct_code":
-        code = message.text.strip()
+        code = message.text.strip().replace(" ", "")
         phone = state.get("phone")
         phone_code_hash = state.get("phone_code_hash")
         temp_client = state.get("temp_client")
@@ -145,7 +146,11 @@ async def handle_text_input(client: Client, message: Message):
             }
             
             await db.add_account(account_data)
-            await temp_client.stop()
+            
+            try:
+                await temp_client.stop()
+            except:
+                pass
             
             await message.reply_text(f"✅ Account {me.phone_number} added successfully!")
             user_states.pop(user_id, None)
@@ -161,11 +166,10 @@ async def handle_text_input(client: Client, message: Message):
                 )
             else:
                 await message.reply_text(f"❌ Error: {error_msg}")
-                if temp_client:
-                    try:
-                        await temp_client.stop()
-                    except:
-                        pass
+                try:
+                    await temp_client.stop()
+                except:
+                    pass
                 user_states.pop(user_id, None)
     
     elif action == "add_direct_2fa":
@@ -173,6 +177,11 @@ async def handle_text_input(client: Client, message: Message):
         temp_client = state.get("temp_client")
         
         try:
+            if not temp_client or not hasattr(temp_client, 'is_connected'):
+                await message.reply_text("❌ Session expired. Please start again from ➕ Add Account")
+                user_states.pop(user_id, None)
+                return
+            
             await temp_client.check_password(password)
             me = await temp_client.get_me()
             session_string = await temp_client.export_session_string()
@@ -187,18 +196,22 @@ async def handle_text_input(client: Client, message: Message):
             }
             
             await db.add_account(account_data)
-            await temp_client.stop()
+            
+            try:
+                await temp_client.stop()
+            except:
+                pass
             
             await message.reply_text(f"✅ Account {me.phone_number} added successfully!")
             user_states.pop(user_id, None)
             
         except Exception as e:
-            await message.reply_text(f"❌ Error: {str(e)}")
-            if temp_client:
-                try:
+            await message.reply_text(f"❌ Error: {str(e)}\n\nPlease start again from ➕ Add Account")
+            try:
+                if temp_client:
                     await temp_client.stop()
-                except:
-                    pass
+            except:
+                pass
             user_states.pop(user_id, None)
 
 @Client.on_message(filters.regex("^📋 My Accounts$") & filters.private)
