@@ -120,11 +120,18 @@ async def toggle_public_add_callback(client: Client, callback: CallbackQuery):
         reply_markup=settings_keyboard()
     )
 
-@Client.on_message(filters.text & filters.private)
+@Client.on_message(filters.text & filters.private, group=2)
 async def handle_admin_text_input(client: Client, message: Message):
     user_id = message.from_user.id
     
     if user_id not in admin_states:
+        return
+    
+    if message.text.startswith('/'):
+        return
+    
+    if message.text in ["➕ Add Account", "📋 My Accounts", "🔗 Join Channels", "📢 DB Channels", 
+                        "👥 Manage Sudoers", "📊 Statistics", "⚙️ Settings", "📣 Broadcast"]:
         return
     
     state = admin_states[user_id]
