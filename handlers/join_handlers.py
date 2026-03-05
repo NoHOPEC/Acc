@@ -63,30 +63,10 @@ async def use_db_channel_callback(client: Client, callback: CallbackQuery):
     join_states[user_id]["channel"] = channel
     join_states[user_id]["channel_username"] = channel.get("username")
     
-    msg = await callback.message.edit_text("⏳ Joining DB channel first...")
-    
-    try:
-        username = channel.get("username")
-        if username.startswith("+") or len(username) > 20:
-            await client.join_chat(username)
-        else:
-            await client.join_chat(f"@{username}" if not username.startswith("@") else username)
-        
-        await msg.edit_text(
-            f"✅ Joined DB channel!\n\n"
-            "🎯 Select join type:",
-            reply_markup=join_type_keyboard()
-        )
-    except Exception as e:
-        if "already" in str(e).lower():
-            await msg.edit_text(
-                f"✅ Already in DB channel!\n\n"
-                "🎯 Select join type:",
-                reply_markup=join_type_keyboard()
-            )
-        else:
-            await msg.edit_text(f"❌ Error joining DB channel: {str(e)}")
-            join_states.pop(user_id, None)
+    await callback.message.edit_text(
+        "🎯 Select join type:",
+        reply_markup=join_type_keyboard()
+    )
 
 @Client.on_callback_query(filters.regex("^join_type_"))
 async def join_type_callback(client: Client, callback: CallbackQuery):
@@ -99,49 +79,130 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
     
     state = join_states[user_id]
     channel_username = state.get("channel_username")
-    mode = state.get("mode", "all")
     
     accounts = await db.get_all_accounts()
     if not accounts:
         await callback.answer("❌ No accounts added!", show_alert=True)
         return
     
-    await callback.message.edit_text("⏳ Fetching links from DB channel...")
+    progress_msg = await callback.message.edit_text(
+        f"⏳ Step 1/3: Joining DB channel with all accounts...\n\n"
+        f"👥 Total Accounts: {len(accounts)}"
+    )
     
     start_id = state.get("start_id")
     end_id = state.get("end_id")
     
-    try:
-        links = await join_manager.fetch_links_from_channel(
-            client,
-            channel_username,
-            start_id,
-            end_id
+    joined_accounts = []
+    failed_accounts = []
+    
+    for idx, account in enumerate(accounts):
+        try:
+            acc_client = await account_manager.get_client(account)
+            if not acc_client:
+                failed_accounts.append(account.get("phone", "Unknown"))
+                continue
+            
+            await acc_client.start()
+            
+            try:
+                if channel_username.startswith("+") or len(channel_username) > 20:
+                    await acc_client.join_chat(channel_username)
+                else:
+                    username = channel_username.replace("@", "")
+                    await acc_client.join_chat(username)
+                joined_accounts.append(account)
+            except Exception as e:
+                error_str = str(e).lower()
+                if "already" in error_str or "participant" in error_str:
+                    joined_accounts.append(account)
+                else:
+                    failed_accounts.append(account.get("phone", "Unknown"))
+            
+            try:
+                await acc_client.stop()
+            except:
+                pass
+            
+            if (idx + 1) % 3 == 0 or idx == len(accounts) - 1:
+                await progress_msg.edit_text(
+                    f"⏳ Step 1/3: Joining DB channel...\n\n"
+                    f"👥 Progress: {idx + 1}/{len(accounts)}\n"
+                    f"✅ Joined: {len(joined_accounts)}\n"
+                    f"❌ Failed: {len(failed_accounts)}"
+                )
+            
+        except Exception as e:
+            failed_accounts.append(account.get("phone", "Unknown"))
+    
+    if not joined_accounts:
+        await progress_msg.edit_text(
+            f"❌ No accounts could join DB channel!\n\n"
+            f"Failed accounts: {len(failed_accounts)}"
         )
+        join_states.pop(user_id, None)
+        return
+    
+    await progress_msg.edit_text(
+        f"⏳ Step 2/3: Fetching links from DB channel...\n\n"
+        f"Using first account to fetch messages..."
+    )
+    
+    links = []
+    try:
+        first_account = joined_accounts[0]
+        fetch_client = await account_manager.get_client(first_account)
+        await fetch_client.start()
+        
+        if channel_username.startswith("+") or len(channel_username) > 20:
+            chat_id = channel_username
+        else:
+            chat_id = channel_username.replace("@", "")
+        
+        message_count = 0
+        async for message in fetch_client.get_chat_history(chat_id):
+            message_count += 1
+            
+            if start_id and end_id:
+                if message.id < start_id or message.id > end_id:
+                    continue
+            elif start_id:
+                if message.id != start_id:
+                    continue
+            
+            if message.text:
+                found_links = join_manager.extract_links(message.text)
+                links.extend(found_links)
+            
+            if message.caption:
+                found_links = join_manager.extract_links(message.caption)
+                links.extend(found_links)
+        
+        await fetch_client.stop()
+        
     except Exception as e:
-        await callback.message.edit_text(f"❌ Error fetching links: {str(e)}")
+        await progress_msg.edit_text(f"❌ Error fetching links: {str(e)}")
         join_states.pop(user_id, None)
         return
     
     if not links:
-        await callback.message.edit_text(
+        await progress_msg.edit_text(
             f"❌ No links found in DB channel!\n\n"
-            f"Channel: {channel_username}\n"
+            f"Checked {message_count} messages\n"
             f"Range: {start_id or 'All'} to {end_id or 'All'}\n\n"
             "Make sure:\n"
             "• DB channel has messages\n"
-            "• Messages contain t.me links\n"
-            "• Message IDs are correct"
+            "• Messages contain t.me links"
         )
         join_states.pop(user_id, None)
         return
     
     unique_links = list(set(links))
     
-    progress_msg = await callback.message.edit_text(
-        f"🚀 Starting join process...\n\n"
-        f"📊 Total Links Found: {len(unique_links)}\n"
-        f"👥 Total Accounts: {len(accounts)}\n"
+    await progress_msg.edit_text(
+        f"⏳ Step 3/3: Joining {len(unique_links)} links...\n\n"
+        f"📊 Total Links: {len(unique_links)}\n"
+        f"👥 Total Accounts: {len(joined_accounts)}\n"
         f"🎯 Join Type: {join_type.capitalize()}\n\n"
         f"⏳ Progress: 0%"
     )
@@ -149,7 +210,7 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
     async def update_progress(progress, acc_num, total_acc, link_num, total_links):
         try:
             await progress_msg.edit_text(
-                f"🚀 Join Process Active...\n\n"
+                f"🚀 Step 3/3: Joining links...\n\n"
                 f"📊 Total Links: {total_links}\n"
                 f"👥 Account: {acc_num}/{total_acc}\n"
                 f"🔗 Link: {link_num}/{total_links}\n\n"
@@ -159,18 +220,22 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
             pass
     
     results = await join_manager.join_links(
-        accounts,
+        joined_accounts,
         unique_links,
         join_type,
         update_progress
     )
     
     await progress_msg.edit_text(
-        f"✅ Join Process Completed!\n\n"
+        f"✅ All Steps Completed!\n\n"
+        f"Step 1 - DB Channel Join:\n"
+        f"✅ Success: {len(joined_accounts)}\n"
+        f"❌ Failed: {len(failed_accounts)}\n\n"
+        f"Step 2 - Links Found: {len(unique_links)}\n\n"
+        f"Step 3 - Joining Results:\n"
         f"✅ Success: {results['success']}\n"
         f"⚠️ Already Member: {results['already_member']}\n"
-        f"❌ Failed: {results['failed']}\n\n"
-        f"📊 Total Processed: {len(unique_links) * len(accounts)}"
+        f"❌ Failed: {results['failed']}"
     )
     
     join_states.pop(user_id, None)
