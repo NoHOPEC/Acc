@@ -1,0 +1,19 @@
+{
+    "name": "Telegram Account Manager Bot",
+    "description": "Telegram account management and automation",
+    "stack": "container",
+    "env": {
+        "BOT_TOKEN": {
+            "description": "Bot token from @BotFather",
+            "value": ""
+        },
+        "OWNER_ID": {
+            "description": "Owner Telegram user ID",
+            "value": ""
+        },
+        "MONGO_URI": {
+            "description": "MongoDB connection URI",
+            "value": ""
+        }
+    }
+}
