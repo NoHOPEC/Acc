@@ -206,11 +206,18 @@ async def delete_db_channel_callback(client: Client, callback: CallbackQuery):
     await callback.answer("✅ DB Channel deleted!", show_alert=True)
     await show_db_channels_callback(client, callback)
 
-@Client.on_message(filters.text & filters.private)
+@Client.on_message(filters.text & filters.private, group=3)
 async def handle_join_text_input(client: Client, message: Message):
     user_id = message.from_user.id
     
     if user_id not in join_states:
+        return
+    
+    if message.text.startswith('/'):
+        return
+    
+    if message.text in ["➕ Add Account", "📋 My Accounts", "🔗 Join Channels", "📢 DB Channels", 
+                        "👥 Manage Sudoers", "📊 Statistics", "⚙️ Settings", "📣 Broadcast"]:
         return
     
     state = join_states[user_id]
