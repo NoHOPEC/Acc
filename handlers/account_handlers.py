@@ -15,6 +15,8 @@ async def add_account_menu(client: Client, message: Message):
         await message.reply_text("❌ You don't have permission to add accounts.")
         return
     
+    user_states.pop(user_id, None)
+    
     await message.reply_text(
         "📱 Choose a method to add your account:",
         reply_markup=add_account_keyboard()
@@ -62,6 +64,7 @@ async def handle_text_input(client: Client, message: Message):
     
     if message.text in ["➕ Add Account", "📋 My Accounts", "🔗 Join Channels", "📢 DB Channels", 
                         "👥 Manage Sudoers", "📊 Statistics", "⚙️ Settings", "📣 Broadcast"]:
+        user_states.pop(user_id, None)
         return
     
     state = user_states[user_id]
@@ -78,7 +81,7 @@ async def handle_text_input(client: Client, message: Message):
         else:
             await msg.edit_text(f"❌ {result}")
         
-        del user_states[user_id]
+        user_states.pop(user_id, None)
     
     elif action == "add_telethon":
         session_string = message.text.strip()
@@ -91,7 +94,7 @@ async def handle_text_input(client: Client, message: Message):
         else:
             await msg.edit_text(f"❌ {result}")
         
-        del user_states[user_id]
+        user_states.pop(user_id, None)
     
     elif action == "add_direct_phone":
         phone = message.text.strip()
@@ -119,7 +122,7 @@ async def handle_text_input(client: Client, message: Message):
             )
         except Exception as e:
             await message.reply_text(f"❌ Error: {str(e)}")
-            del user_states[user_id]
+            user_states.pop(user_id, None)
     
     elif action == "add_direct_code":
         code = message.text.strip()
@@ -145,10 +148,11 @@ async def handle_text_input(client: Client, message: Message):
             await temp_client.stop()
             
             await message.reply_text(f"✅ Account {me.phone_number} added successfully!")
-            del user_states[user_id]
+            user_states.pop(user_id, None)
             
         except Exception as e:
-            if "Two-steps verification" in str(e) or "PASSWORD_HASH_INVALID" in str(e):
+            error_msg = str(e)
+            if "SESSION_PASSWORD_NEEDED" in error_msg or "password" in error_msg.lower():
                 user_states[user_id]["action"] = "add_direct_2fa"
                 user_states[user_id]["code"] = code
                 await message.reply_text(
@@ -156,16 +160,16 @@ async def handle_text_input(client: Client, message: Message):
                     "Please send your 2FA password:"
                 )
             else:
-                await message.reply_text(f"❌ Error: {str(e)}")
+                await message.reply_text(f"❌ Error: {error_msg}")
                 if temp_client:
-                    await temp_client.stop()
-                del user_states[user_id]
+                    try:
+                        await temp_client.stop()
+                    except:
+                        pass
+                user_states.pop(user_id, None)
     
     elif action == "add_direct_2fa":
         password = message.text.strip()
-        phone = state.get("phone")
-        phone_code_hash = state.get("phone_code_hash")
-        code = state.get("code")
         temp_client = state.get("temp_client")
         
         try:
@@ -186,13 +190,16 @@ async def handle_text_input(client: Client, message: Message):
             await temp_client.stop()
             
             await message.reply_text(f"✅ Account {me.phone_number} added successfully!")
-            del user_states[user_id]
+            user_states.pop(user_id, None)
             
         except Exception as e:
             await message.reply_text(f"❌ Error: {str(e)}")
             if temp_client:
-                await temp_client.stop()
-            del user_states[user_id]
+                try:
+                    await temp_client.stop()
+                except:
+                    pass
+            user_states.pop(user_id, None)
 
 @Client.on_message(filters.regex("^📋 My Accounts$") & filters.private)
 async def show_accounts_menu(client: Client, message: Message):
