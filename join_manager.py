@@ -12,17 +12,9 @@ class JoinManager:
         self.join_delay = 3
 
     def extract_links(self, text):
-        pattern = r'https?://(?:t\.me|telegram\.me|telegram\.dog)/(?:\+|joinchat/)?([^\s\)\]]+)'
+        pattern = r'(https?://(?:t\.me|telegram\.me|telegram\.dog)/[^\s\)\]]+)'
         matches = re.findall(pattern, text)
-        links = []
-        for match in matches:
-            if match.startswith('+') or len(match) > 20:
-                links.append(f"https://t.me/+{match.replace('+', '')}")
-            elif 'joinchat' in text:
-                links.append(f"https://t.me/joinchat/{match}")
-            else:
-                links.append(f"https://t.me/{match}")
-        return links
+        return matches
 
     def categorize_link(self, link):
         if '/joinchat/' in link or '/+' in link:
