@@ -165,7 +165,7 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
     
     await progress_msg.edit_text(
         f"⏳ Step 2/3: Fetching links from DB channel...\n\n"
-        f"Using first account to fetch messages..."
+        f"Using first account..."
     )
     
     links = []
@@ -176,12 +176,7 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
         fetch_client = await account_manager.get_client(first_account)
         await fetch_client.start()
         
-        try:
-            chat = await fetch_client.join_chat(channel_username)
-        except:
-            chat = await fetch_client.get_chat(channel_username)
-        
-        async for message in fetch_client.get_chat_history(chat):
+        async for message in fetch_client.get_chat_history(channel_username):
             message_count += 1
             
             if start_id and end_id:
