@@ -96,7 +96,7 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
     
     joined_accounts = []
     failed_accounts = []
-    db_chat_id = None
+    db_chat = None
     
     for idx, account in enumerate(accounts):
         phone = account.get("phone", "Unknown")
@@ -109,26 +109,25 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
             await acc_client.start()
             
             try:
-                if channel_username.startswith("+") or len(channel_username) > 20 or channel_username.startswith("https://"):
+                if channel_username.startswith("https://"):
                     chat = await acc_client.join_chat(channel_username)
-                    if not db_chat_id:
-                        db_chat_id = chat.id
+                    if not db_chat:
+                        db_chat = chat
                 else:
                     username = channel_username.replace("@", "")
                     chat = await acc_client.join_chat(username)
-                    if not db_chat_id:
-                        db_chat_id = chat.id
+                    if not db_chat:
+                        db_chat = chat
                 joined_accounts.append(account)
             except Exception as e:
                 error_str = str(e).lower()
                 if "already" in error_str or "participant" in error_str:
-                    if not db_chat_id:
+                    if not db_chat:
                         try:
-                            if channel_username.startswith("+") or len(channel_username) > 20 or channel_username.startswith("https://"):
-                                chat = await acc_client.get_chat(channel_username)
+                            if channel_username.startswith("https://"):
+                                db_chat = await acc_client.get_chat(channel_username)
                             else:
-                                chat = await acc_client.get_chat(channel_username.replace("@", ""))
-                            db_chat_id = chat.id
+                                db_chat = await acc_client.get_chat(channel_username.replace("@", ""))
                         except:
                             pass
                     joined_accounts.append(account)
@@ -170,38 +169,43 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
     )
     
     links = []
+    message_count = 0
+    
     try:
         first_account = joined_accounts[0]
         fetch_client = await account_manager.get_client(first_account)
         await fetch_client.start()
         
-        message_count = 0
+        if db_chat:
+            chat_to_fetch = db_chat.id
+        else:
+            if channel_username.startswith("https://"):
+                chat_to_fetch = channel_username
+            else:
+                chat_to_fetch = channel_username.replace("@", "")
         
-        try:
-            async for message in fetch_client.get_chat_history(db_chat_id):
-                message_count += 1
-                
-                if start_id and end_id:
-                    if message.id < start_id or message.id > end_id:
-                        continue
-                elif start_id:
-                    if message.id != start_id:
-                        continue
-                
-                if message.text:
-                    found_links = join_manager.extract_links(message.text)
-                    links.extend(found_links)
-                
-                if message.caption:
-                    found_links = join_manager.extract_links(message.caption)
-                    links.extend(found_links)
-        except:
-            pass
+        async for message in fetch_client.get_chat_history(chat_to_fetch):
+            message_count += 1
+            
+            if start_id and end_id:
+                if message.id < start_id or message.id > end_id:
+                    continue
+            elif start_id:
+                if message.id != start_id:
+                    continue
+            
+            if message.text:
+                found_links = join_manager.extract_links(message.text)
+                links.extend(found_links)
+            
+            if message.caption:
+                found_links = join_manager.extract_links(message.caption)
+                links.extend(found_links)
         
         await fetch_client.stop()
         
     except Exception as e:
-        await progress_msg.edit_text(f"❌ Error fetching links: {str(e)}")
+        await progress_msg.edit_text(f"❌ Error fetching links: {str(e)}\n\nMessages checked: {message_count}")
         join_states.pop(user_id, None)
         return
     
