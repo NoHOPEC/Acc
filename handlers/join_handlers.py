@@ -176,15 +176,12 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
         fetch_client = await account_manager.get_client(first_account)
         await fetch_client.start()
         
-        if db_chat:
-            chat_to_fetch = db_chat.id
-        else:
-            if channel_username.startswith("https://"):
-                chat_to_fetch = channel_username
-            else:
-                chat_to_fetch = channel_username.replace("@", "")
+        try:
+            chat = await fetch_client.join_chat(channel_username)
+        except:
+            chat = await fetch_client.get_chat(channel_username)
         
-        async for message in fetch_client.get_chat_history(chat_to_fetch):
+        async for message in fetch_client.get_chat_history(chat):
             message_count += 1
             
             if start_id and end_id:
@@ -205,7 +202,7 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
         await fetch_client.stop()
         
     except Exception as e:
-        await progress_msg.edit_text(f"❌ Error fetching links: {str(e)}\n\nMessages checked: {message_count}")
+        await progress_msg.edit_text(f"❌ Error: {str(e)}\n\nChecked: {message_count} messages")
         join_states.pop(user_id, None)
         return
     
