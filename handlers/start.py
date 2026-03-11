@@ -8,7 +8,11 @@ from keyboards import main_menu_keyboard
 async def start_handler(client: Client, message: Message):
     try:
         user_id = message.from_user.id
-        await db.add_user(user_id)
+        
+        try:
+            await db.add_user(user_id)
+        except:
+            pass
         
         owner = await is_owner(user_id)
         
@@ -24,10 +28,19 @@ async def start_handler(client: Client, message: Message):
         
         welcome_text += "Use the menu below to navigate through bot features."
         
+        keyboard = main_menu_keyboard(owner)
+        
         await message.reply_text(
             welcome_text,
-            reply_markup=main_menu_keyboard(owner)
+            reply_markup=keyboard
         )
     except Exception as e:
         print(f"Start handler error: {e}")
-        await message.reply_text("✅ Bot is running!\n\nUse the buttons below to navigate.")
+        try:
+            keyboard = main_menu_keyboard(False)
+            await message.reply_text(
+                "✅ Bot is running!\n\nUse the buttons below to navigate.",
+                reply_markup=keyboard
+            )
+        except:
+            await message.reply_text("✅ Bot is running!")
