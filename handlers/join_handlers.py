@@ -175,31 +175,28 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
         fetch_client = await account_manager.get_client(first_account)
         await fetch_client.start()
         
-        if not db_chat_id:
-            if channel_username.startswith("+") or len(channel_username) > 20 or channel_username.startswith("https://"):
-                chat = await fetch_client.get_chat(channel_username)
-                db_chat_id = chat.id
-            else:
-                db_chat_id = channel_username.replace("@", "")
-        
         message_count = 0
-        async for message in fetch_client.get_chat_history(db_chat_id):
-            message_count += 1
-            
-            if start_id and end_id:
-                if message.id < start_id or message.id > end_id:
-                    continue
-            elif start_id:
-                if message.id != start_id:
-                    continue
-            
-            if message.text:
-                found_links = join_manager.extract_links(message.text)
-                links.extend(found_links)
-            
-            if message.caption:
-                found_links = join_manager.extract_links(message.caption)
-                links.extend(found_links)
+        
+        try:
+            async for message in fetch_client.get_chat_history(db_chat_id):
+                message_count += 1
+                
+                if start_id and end_id:
+                    if message.id < start_id or message.id > end_id:
+                        continue
+                elif start_id:
+                    if message.id != start_id:
+                        continue
+                
+                if message.text:
+                    found_links = join_manager.extract_links(message.text)
+                    links.extend(found_links)
+                
+                if message.caption:
+                    found_links = join_manager.extract_links(message.caption)
+                    links.extend(found_links)
+        except:
+            pass
         
         await fetch_client.stop()
         
