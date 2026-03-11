@@ -96,6 +96,7 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
     
     joined_accounts = []
     failed_accounts = []
+    db_chat_id = None
     
     for idx, account in enumerate(accounts):
         phone = account.get("phone", "Unknown")
@@ -108,15 +109,28 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
             await acc_client.start()
             
             try:
-                if channel_username.startswith("+") or len(channel_username) > 20:
-                    result = await acc_client.join_chat(channel_username)
+                if channel_username.startswith("+") or len(channel_username) > 20 or channel_username.startswith("https://"):
+                    chat = await acc_client.join_chat(channel_username)
+                    if not db_chat_id:
+                        db_chat_id = chat.id
                 else:
                     username = channel_username.replace("@", "")
-                    result = await acc_client.join_chat(username)
+                    chat = await acc_client.join_chat(username)
+                    if not db_chat_id:
+                        db_chat_id = chat.id
                 joined_accounts.append(account)
             except Exception as e:
                 error_str = str(e).lower()
                 if "already" in error_str or "participant" in error_str:
+                    if not db_chat_id:
+                        try:
+                            if channel_username.startswith("+") or len(channel_username) > 20 or channel_username.startswith("https://"):
+                                chat = await acc_client.get_chat(channel_username)
+                            else:
+                                chat = await acc_client.get_chat(channel_username.replace("@", ""))
+                            db_chat_id = chat.id
+                        except:
+                            pass
                     joined_accounts.append(account)
                 else:
                     failed_accounts.append(f"{phone} ({str(e)[:50]})")
@@ -161,13 +175,15 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
         fetch_client = await account_manager.get_client(first_account)
         await fetch_client.start()
         
-        if channel_username.startswith("+") or len(channel_username) > 20:
-            chat_id = channel_username
-        else:
-            chat_id = channel_username.replace("@", "")
+        if not db_chat_id:
+            if channel_username.startswith("+") or len(channel_username) > 20 or channel_username.startswith("https://"):
+                chat = await fetch_client.get_chat(channel_username)
+                db_chat_id = chat.id
+            else:
+                db_chat_id = channel_username.replace("@", "")
         
         message_count = 0
-        async for message in fetch_client.get_chat_history(chat_id):
+        async for message in fetch_client.get_chat_history(db_chat_id):
             message_count += 1
             
             if start_id and end_id:
