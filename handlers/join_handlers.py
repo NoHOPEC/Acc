@@ -4,6 +4,7 @@ from database import db
 from helpers import is_authorized
 from keyboards import join_menu_keyboard, join_type_keyboard, db_channel_keyboard, db_channel_detail_keyboard
 from join_manager import join_manager
+from account_manager import account_manager
 
 join_states = {}
 
