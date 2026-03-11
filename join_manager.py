@@ -34,12 +34,7 @@ class JoinManager:
         try:
             await client.start()
             
-            if '/joinchat/' in link or '/+' in link:
-                invite_hash = link.split('/')[-1]
-                await client.join_chat(invite_hash)
-            else:
-                username = link.split('/')[-1]
-                await client.join_chat(username)
+            await client.join_chat(link)
             
             await client.stop()
             return True, "Joined successfully"
