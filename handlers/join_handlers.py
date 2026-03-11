@@ -97,27 +97,28 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
     failed_accounts = []
     
     for idx, account in enumerate(accounts):
+        phone = account.get("phone", "Unknown")
         try:
             acc_client = await account_manager.get_client(account)
             if not acc_client:
-                failed_accounts.append(account.get("phone", "Unknown"))
+                failed_accounts.append(f"{phone} (Client creation failed)")
                 continue
             
             await acc_client.start()
             
             try:
                 if channel_username.startswith("+") or len(channel_username) > 20:
-                    await acc_client.join_chat(channel_username)
+                    result = await acc_client.join_chat(channel_username)
                 else:
                     username = channel_username.replace("@", "")
-                    await acc_client.join_chat(username)
+                    result = await acc_client.join_chat(username)
                 joined_accounts.append(account)
             except Exception as e:
                 error_str = str(e).lower()
                 if "already" in error_str or "participant" in error_str:
                     joined_accounts.append(account)
                 else:
-                    failed_accounts.append(account.get("phone", "Unknown"))
+                    failed_accounts.append(f"{phone} ({str(e)[:50]})")
             
             try:
                 await acc_client.stop()
@@ -133,12 +134,17 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
                 )
             
         except Exception as e:
-            failed_accounts.append(account.get("phone", "Unknown"))
+            failed_accounts.append(f"{phone} ({str(e)[:50]})")
     
     if not joined_accounts:
+        error_details = "\n".join([f"• {acc}" for acc in failed_accounts[:5]])
         await progress_msg.edit_text(
             f"❌ No accounts could join DB channel!\n\n"
-            f"Failed accounts: {len(failed_accounts)}"
+            f"Failed accounts ({len(failed_accounts)}):\n{error_details}\n\n"
+            f"Common issues:\n"
+            f"• Session expired - Re-add account\n"
+            f"• Invalid link format\n"
+            f"• Account restricted"
         )
         join_states.pop(user_id, None)
         return
