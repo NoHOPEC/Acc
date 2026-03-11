@@ -251,7 +251,8 @@ async def join_type_callback(client: Client, callback: CallbackQuery):
         f"Step 3 - Joining Results:\n"
         f"✅ Success: {results['success']}\n"
         f"⚠️ Already Member: {results['already_member']}\n"
-        f"❌ Failed: {results['failed']}"
+        f"❌ Failed: {results['failed']}\n\n"
+        f"Debug - Last Error:\n{results['details'][-1]['status'] if results['details'] else 'None'}"
     )
     
     join_states.pop(user_id, None)
