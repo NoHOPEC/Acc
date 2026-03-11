@@ -341,9 +341,10 @@ async def handle_join_text_input(client: Client, message: Message):
             
             if text.startswith("https://t.me/"):
                 if "/+" in text or "/joinchat/" in text:
+                    full_link = text
                     invite_hash = text.split("/")[-1]
                     name = f"Private Channel {invite_hash[:8]}"
-                    username = invite_hash
+                    username = full_link
                 else:
                     username = text.split("/")[-1].replace("@", "")
                     name = f"Channel @{username}"
